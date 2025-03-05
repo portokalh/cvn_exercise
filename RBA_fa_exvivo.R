@@ -23,7 +23,7 @@ df_stats <- read_excel("RBA_FILES/input_data/fa.xlsx", sheet = "transposed")
 df_stats <- df_stats[, 1:163]
 
 # Define output file
-output_xlsx <- paste0("fa_exvivo_Regional_Stats_FDR_", today_date, ".xlsx")
+output_xlsx <- paste0("fa_exvivo_stats_posthoc_FDR_", today_date, ".xlsx")
 
 # Load master sheet and append treatment column based on "SAMBA Brunno"
 df_master <- read_excel("master_sheet_cvn_FINAL.xlsx", sheet = "Sheet1")
@@ -55,7 +55,7 @@ today_date <- format(Sys.Date(), "%Y%m%d")
 
 # Initialize results storage
 anova_results <- data.frame()
-
+posthoc_results <- list()
 
 # Perform linear model and ANOVA for each region
 for (region in colnames(df_stats)[3:ncol(df_stats)]) {
@@ -87,6 +87,19 @@ for (region in colnames(df_stats)[3:ncol(df_stats)]) {
     # Compute effect sizes
     eta_squared <- f_value / (f_value + nrow(df_region) - 1)
     cohen_f <- sqrt(eta_squared / (1 - eta_squared))
+    
+    emmeans_result <- emmeans(model, pairwise ~ Treatment, adjust = "tukey")
+    
+    # Convert to a dataframe
+    posthoc_df <- as.data.frame(emmeans_result$contrasts)
+    
+    # Add region name to the dataframe
+    posthoc_df$Region <- region
+    
+    # Store results in list
+    posthoc_results[[region]] <- posthoc_df
+    
+    
   } else {
     f_value <- NA
     p_value <- NA
@@ -118,6 +131,13 @@ wb <- createWorkbook()
 addWorksheet(wb, "ANOVA Results")
 writeData(wb, "ANOVA Results", anova_results)
 saveWorkbook(wb, output_xlsx, overwrite = TRUE)
+
+posthoc_results_df <- bind_rows(posthoc_results)
+wb <- loadWorkbook(output_xlsx)
+addWorksheet(wb, "Post Hoc Comparisons")
+writeData(wb, "Post Hoc Comparisons", posthoc_results_df)
+saveWorkbook(wb, output_xlsx, overwrite = TRUE)
+
 
 print(paste("Analysis complete. Results saved to", output_xlsx))
 
